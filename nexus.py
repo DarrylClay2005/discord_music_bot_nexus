@@ -280,6 +280,18 @@ async def send_feedback(guild, embed):
                         try: await channel.send(embed=embed)
                         except discord.Forbidden: pass
 
+async def ensure_self_deaf(guild, voice_client):
+    channel = getattr(voice_client, "channel", None)
+    me = guild.me
+    if not channel:
+        return
+    if me and me.voice and me.voice.self_deaf and getattr(me.voice, "channel", None) == channel:
+        return
+    try:
+        await guild.change_voice_state(channel=channel, self_deaf=True)
+    except Exception as e:
+        logger.warning(f"[{guild.id}] Failed to self-deafen voice connection: {e}")
+
 async def ensure_voice_connection(guild, channel_id):
     channel = guild.get_channel(channel_id)
     if not channel: return None
@@ -290,6 +302,7 @@ async def ensure_voice_connection(guild, channel_id):
             voice_client = await channel.connect(cls=wavelink.Player, timeout=60.0)
         elif voice_client.channel.id != channel_id: 
             await voice_client.move_to(channel)
+        await ensure_self_deaf(guild, voice_client)
         if getattr(voice_client, "channel", None):
             pending_voice_channels[guild.id] = voice_client.channel.id
         
